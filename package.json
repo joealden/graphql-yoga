@@ -1,6 +1,6 @@
 {
-  "name": "graphql-yoga",
-  "version": "0.0.0-semantic-release",
+  "name": "@joealden/graphql-yoga",
+  "version": "1.0.0",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "files": ["dist"],
