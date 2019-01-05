@@ -2,6 +2,7 @@ import test, { TestContext, Context } from 'ava'
 import { inflate } from 'graphql-deduplicator'
 import { GraphQLServer, Options } from './index'
 import { promisify } from 'util'
+import { middleware } from 'graphql-middleware'
 import * as request from 'request-promise-native'
 
 async function startServer(t: TestContext & Context<any>, options?: Options) {
@@ -195,6 +196,208 @@ test('graphql-deduplicated can be completely disabled', async t => {
   t.deepEqual(body, {
     data: {
       books: Array(5).fill(book),
+    },
+  })
+})
+
+test('Works with graphql-middleware', async t => {
+  const typeDefs = `
+    type Book {
+      id: ID!
+      name: String!
+      author: String!
+    }
+
+    type Query {
+      book: Book!
+    }
+  `
+
+  const resolvers = {
+    Query: {
+      book: () => ({
+        id: 'id',
+        name: 'name',
+        author: 'author',
+      }),
+    },
+  }
+
+  const middleware = async (resolve, parent, args, ctx, info) => {
+    return 'pass'
+  }
+
+  const server = new GraphQLServer({
+    typeDefs,
+    resolvers,
+    middlewares: [middleware],
+  })
+  const http = await server.start({ port: 0 })
+  const { port } = http.address()
+  const uri = `http://localhost:${port}/`
+
+  const query = `
+    query {
+      book {
+        id
+        name
+        author
+      }
+    }
+  `
+
+  const body = await request({
+    uri,
+    method: 'POST',
+    json: true,
+    body: { query },
+  }).promise()
+
+  t.deepEqual(body, {
+    data: {
+      book: {
+        id: 'pass',
+        name: 'pass',
+        author: 'pass',
+      },
+    },
+  })
+})
+
+test('Works with graphql-middleware generator.', async t => {
+  const typeDefs = `
+    type Book {
+      id: ID!
+      name: String!
+      author: String!
+    }
+
+    type Query {
+      book: Book!
+    }
+  `
+
+  const resolvers = {
+    Query: {
+      book: () => ({
+        id: 'id',
+        name: 'name',
+        author: 'author',
+      }),
+    },
+  }
+
+  const middlewareGenerator = middleware(schema => {
+    return async (resolve, parent, args, ctx, info) => {
+      return 'pass'
+    }
+  })
+
+  const server = new GraphQLServer({
+    typeDefs,
+    resolvers,
+    middlewares: [middlewareGenerator],
+  })
+  const http = await server.start({ port: 0 })
+  const { port } = http.address()
+  const uri = `http://localhost:${port}/`
+
+  const query = `
+    query {
+      book {
+        id
+        name
+        author
+      }
+    }
+  `
+
+  const body = await request({
+    uri,
+    method: 'POST',
+    json: true,
+    body: { query },
+  }).promise()
+
+  t.deepEqual(body, {
+    data: {
+      book: {
+        id: 'pass',
+        name: 'pass',
+        author: 'pass',
+      },
+    },
+  })
+})
+
+test('Works with array of resolvers', async t => {
+  const typeDefs = `
+    type Book {
+      id: ID!
+      name: String!
+      author: String!
+    }
+
+    type Query {
+      book: Book!
+    }
+  `
+
+  const queryResolver = {
+    Query: {
+      book: () => ({
+        id: 'id',
+        name: 'name',
+        author: 'author',
+      }),
+    },
+  }
+
+  const bookIdResolver = {
+    Book: {
+      id: root => `book-${root.id}`,
+    },
+  }
+
+  const bookNameResolver = {
+    Book: {
+      name: root => `book-${root.name}`,
+    },
+  }
+
+  const server = new GraphQLServer({
+    typeDefs,
+    resolvers: [queryResolver, bookIdResolver, bookNameResolver],
+    middlewares: [],
+  })
+  const http = await server.start({ port: 0 })
+  const { port } = http.address()
+  const uri = `http://localhost:${port}/`
+
+  const query = `
+    query {
+      book {
+        id
+        name
+        author
+      }
+    }
+  `
+
+  const body = await request({
+    uri,
+    method: 'POST',
+    json: true,
+    body: { query },
+  }).promise()
+
+  t.deepEqual(body, {
+    data: {
+      book: {
+        id: 'book-id',
+        name: 'book-name',
+        author: 'author',
+      },
     },
   })
 })
